@@ -1,0 +1,13 @@
+{
+  "name": "agent-visualizer",
+  "version": "1.0.0",
+  "description": "Drag-and-drop designer for multi-agent Claude Code workflows. Generates .agent/ and .claude/ agent definitions, a workflow playbook and a session hook.",
+  "license": "MIT",
+  "private": true,
+  "bin": { "agent-visualizer": "server.js" },
+  "scripts": {
+    "start": "node server.js --open",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=18" }
+}

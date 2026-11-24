@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Visualizer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%224%22 fill=%22%237c8cff%22/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark"></span>Agent Visualizer</div>
+    <input id="wf-name" class="wf-name" spellcheck="false" aria-label="Workflow name" />
+    <div class="tb-group">
+      <select id="tpl-select" aria-label="Load template"><option value="">Templates…</option></select>
+      <button id="btn-layout" title="Arrange nodes automatically">Auto-layout</button>
+      <button id="btn-undo" title="Undo (⌘Z)">Undo</button>
+      <button id="btn-redo" title="Redo (⇧⌘Z)">Redo</button>
+      <button id="btn-import" title="Load a workflow.json">Import</button>
+      <button id="btn-export" title="Download the design as JSON">Export</button>
+      <input id="file-input" type="file" accept="application/json,.json" hidden />
+    </div>
+    <div class="spacer"></div>
+    <button id="project-chip" class="project-chip" title="Target project (click to change)"><span class="pc-label">Project</span><span id="project-path">…</span></button>
+    <button id="btn-ai-design" class="ai" title="Describe an idea and let Claude design the agent flow">✨ Design from idea</button>
+    <button id="btn-generate" class="primary">Preview &amp; Generate</button>
+  </header>
+
+  <main class="layout">
+    <aside class="palette">
+      <nav class="tabs" role="tablist">
+        <button class="tab on" data-tab="build" role="tab">Build</button>
+        <button class="tab" data-tab="agents" role="tab">Agents <span id="agents-count" class="count"></span></button>
+        <button class="tab" data-tab="skills" role="tab">Skills <span id="skills-count" class="count"></span></button>
+      </nav>
+
+      <section class="tab-panel" data-panel="build">
+        <h2>Roles</h2>
+        <p class="hint">Drag onto the canvas.</p>
+        <div id="palette-list"></div>
+        <h2 class="row-h">My agents <button id="btn-new-custom" class="mini" title="Create your own agent type">+ New</button></h2>
+        <p class="hint" id="custom-hint">Your own reusable agent types. Create one, then drag it in.</p>
+        <div id="custom-list"></div>
+        <h2>Links</h2>
+        <ul class="legend">
+          <li><span class="sw handoff"></span><b>handoff</b> output flows to the next agent</li>
+          <li><span class="sw pass"></span><b>on PASS</b> taken when the verdict passes</li>
+          <li><span class="sw fail"></span><b>on FAIL</b> loop back, capped by max iterations</li>
+          <li><span class="sw report"></span><b>report</b> results go back up</li>
+        </ul>
+        <h2>Controls</h2>
+        <ul class="keys">
+          <li>Drag from a node's <span class="port-demo"></span> handle to another node to link them</li>
+          <li>Click a node or link to edit it</li>
+          <li>Drag the background to pan, scroll to zoom</li>
+          <li><kbd>Del</kbd> remove · <kbd>⌘D</kbd> duplicate · <kbd>⌘Z</kbd> undo</li>
+        </ul>
+      </section>
+
+      <section class="tab-panel" data-panel="agents" hidden>
+        <h2 class="row-h">Existing agents <button id="btn-refresh-lib" class="mini" title="Rescan agent folders">Refresh</button></h2>
+        <p class="hint">Agents Claude Code already sees for this project. Edit them, or drag one onto the canvas to use it in the workflow as-is.</p>
+        <div id="agent-lib"></div>
+      </section>
+
+      <section class="tab-panel" data-panel="skills" hidden>
+        <h2 class="row-h">Skills <button id="btn-refresh-lib2" class="mini" title="Rescan skill folders">Refresh</button></h2>
+        <p class="hint">Installed skills, and which agents are equipped with them. Select an agent on the canvas to equip or remove skills.</p>
+        <input id="skill-filter" placeholder="Filter skills…" />
+        <div id="skill-lib"></div>
+      </section>
+    </aside>
+
+    <section id="canvas" class="canvas" tabindex="0" aria-label="Workflow canvas">
+      <div id="world" class="world">
+        <svg id="edges" class="edges" width="1" height="1">
+          <defs id="markers"></defs>
+          <g id="edge-layer"></g>
+          <path id="temp-edge" class="temp-edge" d="" />
+        </svg>
+        <div id="node-layer"></div>
+      </div>
+      <div id="notice" class="notice" hidden>
+        <span id="notice-text"></span>
+        <span id="notice-actions" class="notice-actions"></span>
+        <button id="notice-close" class="ghost" aria-label="Dismiss">✕</button>
+      </div>
+      <div id="empty-hint" class="empty-hint" hidden>
+        <p>Drag an agent from the left to start, or pick a template above.</p>
+      </div>
+      <div class="zoom">
+        <button id="zoom-out" aria-label="Zoom out">−</button>
+        <span id="zoom-label">100%</span>
+        <button id="zoom-in" aria-label="Zoom in">+</button>
+        <button id="zoom-fit" title="Fit to screen">Fit</button>
+      </div>
+      <button id="status" class="status" title="Show validation details"></button>
+    </section>
+
+    <aside id="inspector" class="inspector"></aside>
+  </main>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header class="modal-head">
+        <h2 id="modal-title">Preview generated files</h2>
+        <button id="modal-close" class="ghost" aria-label="Close">✕</button>
+      </header>
+      <div id="modal-issues" class="issues"></div>
+      <div class="modal-body">
+        <ul id="file-list" class="file-list"></ul>
+        <pre id="file-view" class="file-view"></pre>
+      </div>
+      <footer class="modal-foot">
+        <div id="modal-target" class="muted"></div>
+        <div class="spacer"></div>
+        <button id="btn-write" class="primary">Write to project</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="dialog" class="modal" hidden>
+    <div class="modal-card dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <header class="modal-head">
+        <h2 id="dialog-title"></h2>
+        <button id="dialog-close" class="ghost" aria-label="Close">✕</button>
+      </header>
+      <div id="dialog-body" class="dialog-body"></div>
+      <footer id="dialog-foot" class="modal-foot"></footer>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="generator.js"></script>
+  <script src="templates.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
